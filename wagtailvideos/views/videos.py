@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.core.paginator import Paginator
+from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.translation import gettext as _
@@ -56,6 +57,12 @@ def index(request):
             videos = videos.filter(collection=current_collection)
         except (ValueError, Collection.DoesNotExist):
             pass
+
+    if 'error' in request.GET:
+        videos = videos.filter(
+            ~Q(error_message='')
+            | (Q(transcodes__isnull=False) & ~Q(transcodes__error_message=""))
+        )
 
     paginator = Paginator(videos, per_page=25)
     page = paginator.get_page(request.GET.get('p'))
