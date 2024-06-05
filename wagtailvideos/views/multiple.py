@@ -33,6 +33,23 @@ def add(request):
     Video = get_video_model()
     VideoForm = get_video_form(Video)
 
+    def _success_response(video):
+        return JsonResponse({
+            'success': True,
+            'video_id': int(video.id),
+            'form': render_to_string('wagtailvideos/multiple/edit_form.html', {
+                'video': video,
+                'form': get_video_edit_form(Video)(
+                    instance=video, prefix='video-%d' % video.id),
+            }, request=request),
+        })
+
+    def _error_response(error_message):
+        return JsonResponse({
+            'success': False,
+            'error_message': error_message,
+        })
+
     collections = permission_policy.collections_user_has_permission_for(request.user, 'add')
     if len(collections) > 1:
         collections_to_choose = collections
@@ -45,7 +62,24 @@ def add(request):
             return HttpResponseBadRequest("Cannot POST to this view without AJAX")
 
         if not request.FILES:
-            return HttpResponseBadRequest("Must upload a file")
+            if not request.POST['location']:
+                return HttpResponseBadRequest("Must upload a file")
+
+            location = request.POST['location']
+
+            if Video.objects.filter(file=location).exists():
+                return _error_response('Video already exists.')
+
+            video = Video(
+                title=location.split('/')[-1],
+                uploaded_by_user=request.user,
+            )
+            video.file = location
+            try:
+                video.save()
+            except Exception as e:
+                return _error_response(str(e))
+            return _success_response(video)
 
         # Build a form for validation
         form = VideoForm({
@@ -61,23 +95,10 @@ def add(request):
             video.save()
 
             # Success! Send back an edit form
-            return JsonResponse({
-                'success': True,
-                'video_id': int(video.id),
-                'form': render_to_string('wagtailvideos/multiple/edit_form.html', {
-                    'video': video,
-                    'form': get_video_edit_form(Video)(
-                        instance=video, prefix='video-%d' % video.id),
-                }, request=request),
-            })
+            return _success_response(video)
         else:
             # Validation error
-            return JsonResponse({
-                'success': False,
-
-                # https://github.com/django/django/blob/stable/1.6.x/django/forms/util.py#L45
-                'error_message': '\n'.join(['\n'.join([force_str(i) for i in v]) for k, v in form.errors.items()]),
-            })
+            return _error_response('\n'.join(['\n'.join([force_str(i) for i in v]) for k, v in form.errors.items()]))
     else:
         form = VideoForm()
 

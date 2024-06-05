@@ -136,6 +136,39 @@ $(function() {
         });
     });
 
+    $('#add_storage').click(function(e) {
+       var input = $('#locations');
+       var form = $(this).closest('form');
+       var CSRFToken = $('input[name="csrfmiddlewaretoken"]', form).val();
+       var href = form.attr('action');
+        var locationsStr = input.val();
+        var locations = locationsStr.split('\n').map(function (x) {
+            return x.trim();
+        }).filter(function (x) {
+            return x;
+        });
+        locations.forEach(function (location) {
+              $.post(
+                href,
+                {csrfmiddlewaretoken: CSRFToken, location: location},
+                function (data) {
+                    var itemElement = $($('#upload-list-item').html()).addClass(data.success ? 'upload-success' : 'upload-failure');
+                    $('#upload-list').append(itemElement);
+
+                    if (data.success) {
+                        itemElement.addClass('upload-success');
+                        $('.preview', itemElement).attr('data-thumb-target', data.video_id);
+                        $('.right', itemElement).append(data.form);
+                    } else {
+                        itemElement.addClass('upload-failure');
+                        $('.right .error_messages', itemElement).append(data.error_message);
+                    }
+                }
+              );
+        });
+        input.val('');
+    });
+
     $('#upload-list').on('click', '.delete', function(e) {
         var form = $(this).closest('form');
         var itemElement = form.closest('#upload-list > li');
