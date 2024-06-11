@@ -6,6 +6,7 @@ from django.db import transaction
 from django.db.models.signals import post_delete, post_save
 
 from wagtailvideos import ffmpeg, get_video_model
+from django.conf import settings
 
 
 @contextmanager
@@ -40,12 +41,8 @@ def post_delete_file_cleanup(instance, **kwargs):
 
 
 # Fields that need the actual video file to create using ffmpeg
-def video_post_save(instance, **kwargs):
+def video_post_process(instance):
     if not ffmpeg.installed():
-        return
-
-    if hasattr(instance, '_from_signal'):
-        # Sender was us, don't run post save
         return
 
     has_changed = instance._initial_file is not instance.file
@@ -62,6 +59,20 @@ def video_post_save(instance, **kwargs):
     instance._from_signal = True
     instance.save()
     del instance._from_signal
+
+
+def video_post_save(instance, **kwargs):
+    if hasattr(instance, '_from_signal'):
+        # Sender was us, don't run post save
+        return
+
+    async_postprocess_size = getattr(settings, 'WAGTAILVIDEOS_ASYNC_POSTPROCESS_SIZE', None)
+    if async_postprocess_size and instance.file.size > async_postprocess_size:
+        print('async_postprocess_size and instance.file.size > async_postprocess_size')
+        from wagtailvideos.tasks import video_post_process_task
+        video_post_process_task(instance.pk)
+    else:
+        video_post_process(instance)
 
 
 def register_signal_handlers():
