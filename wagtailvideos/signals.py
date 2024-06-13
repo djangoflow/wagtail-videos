@@ -68,9 +68,8 @@ def video_post_save(instance, **kwargs):
 
     async_postprocess_size = getattr(settings, 'WAGTAILVIDEOS_ASYNC_POSTPROCESS_SIZE', None)
     if async_postprocess_size and instance.file.size > async_postprocess_size:
-        print('async_postprocess_size and instance.file.size > async_postprocess_size')
         from wagtailvideos.tasks import video_post_process_task
-        video_post_process_task(instance.pk)
+        video_post_process_task.delay(instance.pk)
     else:
         video_post_process(instance)
 
