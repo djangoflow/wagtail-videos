@@ -49,7 +49,7 @@ def video_post_process(instance):
     filled_out = instance.thumbnail is not None and instance.duration is not None
     if has_changed or not filled_out:
         with get_local_file(instance.file) as file_path:
-            if has_changed or instance.thumbnail is None:
+            if has_changed or instance.thumbnail is None or instance.thumbnail.name == '':
                 instance.thumbnail = ffmpeg.get_thumbnail(file_path)
 
             if has_changed or instance.duration is None:
@@ -66,12 +66,14 @@ def video_post_save(instance, **kwargs):
         # Sender was us, don't run post save
         return
 
-    async_postprocess_size = getattr(settings, 'WAGTAILVIDEOS_ASYNC_POSTPROCESS_SIZE', None)
-    if async_postprocess_size and instance.file.size > async_postprocess_size:
-        from wagtailvideos.tasks import video_post_process_task
-        video_post_process_task.delay(instance.pk)
-    else:
-        video_post_process(instance)
+    def on_commit():
+        async_postprocess_size = getattr(settings, 'WAGTAILVIDEOS_ASYNC_POSTPROCESS_SIZE', None)
+        if async_postprocess_size and instance.file.size > async_postprocess_size:
+            from wagtailvideos.tasks import video_post_process_task
+            video_post_process_task.delay(instance.pk)
+        else:
+            video_post_process(instance)
+    transaction.on_commit(on_commit)
 
 
 def register_signal_handlers():
